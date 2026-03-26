@@ -1,0 +1,319 @@
+specification {
+  element actor { style { shape person } }
+  element system { style { shape rectangle } }
+  element container { style { shape rectangle opacity 10% border solid } }
+  element component { style { shape component } }
+  element queue { style { shape queue } }
+  element storage { style { shape storage } }
+  element document { style { shape document } }
+
+  tag api
+  tag business
+  tag ml
+  tag infra
+  tag optional
+  tag mvp
+}
+
+model {
+  user = actor 'Пользователь' {
+    description 'Отправляет запрос и получает ответ через REST API'
+  }
+
+  app = system 'LLM Chain REST API (FastAPI + LangChain)' {
+    title 'LLM Chain REST API'
+    description '''
+      Цель: спроектировать и реализовать REST-интерфейс, который выполняет цепочку из 3 LLM:
+      1) Генерация ответа на пользовательский запрос
+      2) Валидация и исправление (проверка фактов, стиля, безопасности)
+      3) Улучшение (добавление деталей, структурирование)
+
+      MVP:
+      - последовательный вызов трёх free моделей
+      - простые промпты (без RAG)
+      - синхронный REST: запрос -> ответ
+
+      Не вошло в MVP и почему:
+      - более новые и дорогие модели: если всё правильно написать, то заменить модель будет элементарно, но топовые модели обычно дорогие и придётся платить за подписку
+      - очередь и асинхронность: сложнее по инфраструктуре, сложнее тестировать
+      - кэширование: в целом несложно, но на этапе MVP смысла в кешировании особо не вижу
+      - долгосрочная память: реализуется не очень просто, но полезно на будущее
+
+      Узкие места:
+      - вызовы LLM (latency, стоимость, лимиты, таймауты)
+      - качество валидации: вторая модель может пропустить ошибки или наоборот ошибочно исправить корректный ответ. Надо продумать этот сценарий
+    '''
+    technology 'Python • FastAPI • LangChain • OpenRouter.ai'
+
+    restApi = container 'REST API (FastAPI)' {
+      #api #mvp
+      description '''
+      Контейнер приложения.
+      Отдельный сервис в `docker-compose`.
+
+      Эндпоинты:
+      - `POST /v1/generate` - основной пользовательский сценарий
+      - `GET /health` - проверка, что ничего не упало
+      '''
+
+      health = component 'GET /health' {
+        description 'Проверка работоспособности сервиса'
+      }
+
+      generate = component 'POST /v1/generate' {
+        description '''
+        Основной сценарий: пользовательский запрос -> ответ.
+
+        Обработка:
+        - передача в LangChain pipeline
+        - возврат структурированного ответа
+        '''
+      }
+    }
+
+    pipeline = container 'LangChain Pipeline Orchestrator' {
+      #business #ml #mvp
+      description '''
+      Оркестрация бизнес-логики и ML-цепочки.
+
+      Производительность:
+      - измеряем latency на этапах 1-3
+      - оцениваем стоимость (например, токены)
+
+      Масштабируемость:
+      - по умолчанию синхронно (MVP)
+      - в будущем можно асинхронно через очередь и кэширование
+    '''
+
+      configUsage = component 'Input/Output + обработка ошибок' {
+        #business
+        description '''
+        Предобработка:
+        - нормализация входного запроса
+        - лимиты длины
+        - валидация структуры входа
+
+        Обработка ошибок:
+        - таймауты вызовов LLM
+        - обработка невалидных ответов (повторная валидация)
+        '''
+      }
+
+      stage1 = component 'LLM #1 - Генерация ответа' {
+        #ml #mvp
+        description '''
+        Зачем:
+        - быстрый и дешёвый (free) черновой ответ
+
+        Что делает:
+        - генерирует первичный ответ на запрос пользователя
+        '''
+      }
+
+      stage2 = component 'LLM #2 - Валидация и исправление' {
+        #ml #mvp
+        description '''
+        Зачем:
+        - более точная для проверки фактов, стиля и безопасности
+
+        Что делает:
+        - проверяет соответствие запросу
+        - снижает риск невалидного/небезопасного контента
+        - исправляет противоречия и улучшает формулировки
+        '''
+      }
+
+      stage3 = component 'LLM #3 (free) - Улучшение' {
+        #ml #mvp
+        description '''
+        Зачем:
+        - финальная генерация для добавления деталей и структурирования
+
+        Что делает:
+        - делает ответ более подробным, логичным и оформленным
+        '''
+      }
+
+      routerAdapter = component 'OpenRouter Adapter (HTTP-клиент)' {
+        #ml
+        description '''
+        Унифицированный доступ к LLM через OpenRouter.
+        '''
+      }
+    }
+
+    config = document 'Конфигурация моделей и параметров' {
+      #business
+      description '''
+      Источники:
+      - ENV:
+        `OPENROUTER_API_KEY`
+        `MODEL_STAGE1`
+        `MODEL_STAGE2`
+        `MODEL_STAGE3`
+        `TIMEOUT_SEC`, `MAX_TOKENS`, `RETRIES`
+
+      То есть модель можно заменить через конфигурацию без правок кода.
+      '''
+    }
+
+    observability = container 'Логирование и метрики' {
+      #infra
+      description '''
+      Логи
+      '''
+
+      logs = component 'Логи' {
+        description 'Единый формат логов: ошибки, таймауты, информация про этапы 1-3.'
+      }
+
+      promExporter = component 'Метрики' {
+        description '''
+        Метрики:
+        - latency
+        - cost_estimate (оценка по токенам)
+        - модель/провайдер
+        '''
+      }
+    }
+
+    quality = container 'Quality Metrics & Evaluation' {
+      #infra
+      description '''
+      Метрика качества:
+      - `LLM-as-a-judge` для оценки:
+        точности/фактов, безопасности, стиля/структуры, полезности
+
+      Датасет:
+      - набор пользовательских запросов (и критериев)
+
+      Замеры:
+      - latency по этапам
+      - стоимость по токенам
+      '''
+
+      dataset = component 'Evaluation датасет' {
+        description 'Небольшой датасет запросов и ожидаемых критериев оценки.'
+      }
+
+      judge = component 'LLM-as-a-judge scorer' {
+        description 'Каждая следующая LLM оценивает ответ предыдущей по критерием: точность и фактологическая корректность, стиль и структурированность, полезность и полнота ответа относительно запроса.'
+      }
+
+      reports = component 'Отчёты по метрикам' {
+        description 'Таблицы по метрикам.'
+      }
+    }
+
+    tests = container 'Тестирование' {
+      #infra
+      description '''
+      - 3–5 unit-тестов на критическую логику
+      - базовый нагрузочный тест
+      '''
+
+      unit = component 'Логика' {
+        description '''
+        Можно протестировать:
+        - обработка невалидных входных данных
+        - корректность оркестрации этапов
+        - обработка таймаутов/ошибок LLM
+        - валидация выходного формата
+        '''
+      }
+    }
+
+    scaling = container 'Масштабируемость' {
+      #infra #optional
+      description '''
+      Узкое место: вызовы LLM.
+      Будущие улучшения:
+      - асинхронность через очередь задач
+      - кэширование результатов
+      '''
+
+      jobsQueue = queue 'Очередь' {
+        description 'Очередь для выполнения цепочки как фоновой задачи.'
+      }
+
+      redisCache = storage 'Redis' {
+        description 'Кэширование ответов/промежуточных результатов для снижения стоимости.'
+      }
+    }
+
+  }
+
+  openrouter = system 'OpenRouter.ai' {
+    #infra
+    description '''
+    Внешний сервис провайдера LLM.
+    Для MVP можно использовать бесплатные модели.
+    '''
+    openrouterApi = container 'OpenRouter API' {
+      description 'HTTPS endpoint: выбор модели, стоимость и ответы.'
+    }
+  }
+
+  legend = document 'Легенда' {
+    description '''
+    Элементы:
+    - `actor`: пользователь
+    - `container`: сервис/контейнер приложения
+    - `component`: модуль/подсистема внутри контейнера
+    - `queue`: очередь фоновых задач
+    - `storage`: хранилище/кэш
+
+    Теги:
+    - `#mvp`: часть MVP, необходимая для основного сценария
+    - `#optional`: будущие улучшения масштабирования
+    '''
+  }
+
+  user -> app.restApi.generate 'POST /v1/generate'
+  user -> app.restApi.health 'GET /health'
+
+  app.config -> app.pipeline.routerAdapter 'model selection + params'
+
+  app.restApi.generate -> app.pipeline.configUsage 'pre/post + error handling'
+  app.pipeline.configUsage -> app.observability.logs 'log errors + traces'
+  app.pipeline.configUsage -> app.observability.promExporter 'latency/cost metrics'
+
+  app.restApi.generate -> app.pipeline.stage1 'LLM stage 1'
+  app.pipeline.stage1 -> app.pipeline.stage2 'LLM stage 2'
+  app.pipeline.stage2 -> app.pipeline.stage3 'LLM stage 3'
+
+  app.pipeline.stage1 -> app.pipeline.routerAdapter 'request model #1 (free)'
+  app.pipeline.stage2 -> app.pipeline.routerAdapter 'request model #2 (validation)'
+  app.pipeline.stage3 -> app.pipeline.routerAdapter 'request model #3 (improve)'
+  app.pipeline.routerAdapter -> openrouter.openrouterApi 'HTTPS (unified LLM access)'
+
+  app.quality.dataset -> app.quality.judge 'evaluation criteria + prompts'
+  app.quality.judge -> app.pipeline.stage3 'judge answers (LLM-as-a-judge)'
+  app.pipeline.stage3 -> app.quality.reports 'latency/cost + quality scores'
+
+  app.tests.unit -> app.pipeline.configUsage 'unit tests (validation/errors)'
+
+  app.restApi.generate -> app.scaling.jobsQueue 'enqueue async job'
+  app.scaling.jobsQueue -> app.pipeline.configUsage 'job executes chain'
+  app.pipeline.stage1 -> app.scaling.redisCache 'cache hits reduce LLM calls'
+}
+
+views {
+  view index {
+    title 'C4 - Containers & Components (FastAPI + LangChain + OpenRouter)'
+    description '''
+    C4 диаграмма уровня контейнеров и компонентов.
+
+    На ней отражены требования ТЗ:
+    - MVP: цепочка из 3 LLM (генерация -> валидация -> улучшение)
+    - REST API (FastAPI) и эндпоинты
+    - Конфигурация (env) как зависимость для выбора моделей
+    - OpenRouter как внешний сервис
+    - Логирование/метрики и сбор latency
+    - Датасет и замеры
+    - Unit-тесты
+    - Масштабируемость: очередь и кэш как будущие улучшения
+    '''
+    include *
+  }
+}
