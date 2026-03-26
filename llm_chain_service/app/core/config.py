@@ -1,18 +1,22 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    OPENROUTER_API_KEY: str
+    openrouter_api_key: str = Field(validation_alias="OPENROUTER_API_KEY")
+    openrouter_base_url: str = Field(
+        validation_alias="OPENROUTER_BASE_URL",
+    )
 
-    MODEL_STAGE1: str
-    MODEL_STAGE2: str
-    MODEL_STAGE3: str
+    model_stage1: str = Field(validation_alias="MODEL_STAGE1")
+    model_stage2: str = Field(validation_alias="MODEL_STAGE2")
+    model_stage3: str = Field(validation_alias="MODEL_STAGE3")
 
-    TIMEOUT_SEC: int = 30
-    MAX_TOKENS: int = 2000
-    RETRIES: int = 2
+    timeout_sec: int = Field(default=30, validation_alias="TIMEOUT_SEC")
+    max_tokens: int = Field(default=2000, validation_alias="MAX_TOKENS")
+    retries: int = Field(default=2, validation_alias="RETRIES")
 
-    LOG_LEVEL: str = "INFO"
+    log_level: str = Field(default="INFO", validation_alias="LOG_LEVEL")
 
     model_config = SettingsConfigDict(
         env_file=".env",
