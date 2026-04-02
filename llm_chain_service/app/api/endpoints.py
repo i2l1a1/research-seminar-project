@@ -29,6 +29,8 @@ def generate(req: GenerateRequest) -> GenerateResponse:
             "draft": result.get("draft"),
             "validated": result.get("validated"),
             "latency_per_stage": result.get("latency_per_stage"),
+            "tokens_per_stage": result.get("tokens_per_stage"),
+            "estimated_cost_total": result.get("estimated_cost_total"),
         },
     )
 
