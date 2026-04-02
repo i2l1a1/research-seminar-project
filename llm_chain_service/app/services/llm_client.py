@@ -4,8 +4,6 @@ import time
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from langchain_openai import ChatOpenAI
-
 from app.core.config import Settings
 
 
@@ -17,7 +15,9 @@ class OpenRouterClientError(RuntimeError):
 class OpenRouterClient:
     settings: Settings
 
-    def _chat(self, model: str) -> ChatOpenAI:
+    def _chat(self, model: str) -> Any:
+        from langchain_openai import ChatOpenAI
+
         return ChatOpenAI(
             api_key=self.settings.openrouter_api_key,
             base_url=self.settings.openrouter_base_url,
