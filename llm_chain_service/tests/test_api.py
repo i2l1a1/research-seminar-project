@@ -5,11 +5,12 @@ from fastapi.testclient import TestClient
 
 os.environ.setdefault("OPENROUTER_API_KEY", "test-key")
 os.environ.setdefault("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-os.environ.setdefault("MODEL_STAGE1", "model_stage1")
-os.environ.setdefault("MODEL_STAGE2", "model_stage2")
-os.environ.setdefault("MODEL_STAGE3", "model_stage3")
+os.environ.setdefault("MODEL_STEP1", "test-model-step1")
+os.environ.setdefault("MODEL_STEP2", "test-model-step2")
+os.environ.setdefault("MODEL_STEP3", "test-model-step3")
+os.environ.setdefault("MODEL_STEP4", "test-model-step4")
 
-from app.main import app  # noqa: E402
+from app.main import app
 
 client = TestClient(app)
 
@@ -33,6 +34,12 @@ def test_post_generate_success_returns_chain_json():
     mocked = {
         "final": "final",
         "latency_total_sec": 0.05,
+        "latency_per_step": {
+            "step1_classify_sec": 0.01,
+            "step2_sec": 0.02,
+            "step3_sec": 0.01,
+            "step4_sec": 0.01,
+        },
         "error": None,
     }
 
@@ -47,4 +54,5 @@ def test_post_generate_success_returns_chain_json():
     body = resp.json()
     assert body["answer"] == "final"
     assert body["metadata"]["latency_total_sec"] == 0.05
+    assert body["metadata"]["latency_per_step"]["step1_classify_sec"] == 0.01
     assert body["metadata"]["error"] is None

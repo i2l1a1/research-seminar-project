@@ -1,9 +1,10 @@
 from langchain_core.messages import HumanMessage, SystemMessage
-from app.services.generation.build_chat import _build_chat, safe_ainvoke
+
+from app.services.generation.build_chat import timed_safe_ainvoke
 
 
-async def generate_answer_text(question_title: str, question_text: str) -> str:
-    chat = _build_chat(max_tokens=4096, temperature=0.8)
+async def generate_answer_text(question_title: str, question_text: str) -> tuple[str, dict[str, float]]:
+    latency: dict[str, float] = {}
 
     step1_system = SystemMessage(
         content="Ты - креативный эксперт. Помогаешь генерировать идеи, сценарии, названия, дизайн. Все инструкции написаны на русском, но ты должен определить язык вопроса по самому вопросу пользователя, а не по языку инструкций."
@@ -25,7 +26,10 @@ async def generate_answer_text(question_title: str, question_text: str) -> str:
 Цель: <чего хочет пользователь>"""
     )
     step1_messages = [step1_system, step1_user]
-    step1_result = (await safe_ainvoke(chat, step1_messages)).content
+    msg1, latency["step2_sec"] = await timed_safe_ainvoke(
+        2, step1_messages, max_tokens=4096, temperature=0.8
+    )
+    step1_result = msg1.content
     print("=== [Creative] Шаг 1 (Анализ творческой задачи) ===\n", step1_result, "\n")
 
     detected_language = "русский"
@@ -58,7 +62,10 @@ async def generate_answer_text(question_title: str, question_text: str) -> str:
 Ответ:"""
     )
     step2_messages = [step2_system, step2_user]
-    step2_result = (await safe_ainvoke(chat, step2_messages)).content
+    msg2, latency["step3_sec"] = await timed_safe_ainvoke(
+        3, step2_messages, max_tokens=4096, temperature=0.8
+    )
+    step2_result = msg2.content
     print("=== [Creative] Шаг 2 (Черновик) ===\n", step2_result, "\n")
 
     step3_system = SystemMessage(
@@ -82,7 +89,10 @@ async def generate_answer_text(question_title: str, question_text: str) -> str:
 Верни только исправленный ответ. Без пояснений."""
     )
     step3_messages = [step3_system, step3_user]
-    step3_result = (await safe_ainvoke(chat, step3_messages)).content
+    msg3, latency["step4_sec"] = await timed_safe_ainvoke(
+        4, step3_messages, max_tokens=4096, temperature=0.8
+    )
+    step3_result = msg3.content
     print("=== [Creative] Шаг 3 (Финальный ответ) ===\n", step3_result, "\n")
 
-    return step3_result
+    return step3_result, latency

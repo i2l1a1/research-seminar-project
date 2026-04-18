@@ -1,33 +1,59 @@
-import os
-from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import BaseMessage, AIMessage
-from typing import List
 import asyncio
+import os
+import time
+from typing import List
+
+from dotenv import load_dotenv
+from langchain_core.messages import AIMessage, BaseMessage
+from langchain_openai import ChatOpenAI
 
 load_dotenv(dotenv_path=".env")
 
+# Шаг 1 — classify_question; шаги 2–4 — три LLM-вызова в generate_answer_text (по типу вопроса).
+# Fallback: OPENROUTER_MODEL или предыдущие MODEL_STEP*, если для шага не задано отдельно.
+_STEP_ENV_KEYS: dict[int, list[str]] = {
+    1: ["MODEL_STEP1", "OPENROUTER_MODEL"],
+    2: ["MODEL_STEP2", "MODEL_STEP1", "OPENROUTER_MODEL"],
+    3: ["MODEL_STEP3", "MODEL_STEP2", "MODEL_STEP1", "OPENROUTER_MODEL"],
+    4: ["MODEL_STEP4", "MODEL_STEP3", "MODEL_STEP2", "MODEL_STEP1", "OPENROUTER_MODEL"],
+}
 
-def _resolve_model_name() -> str:
-    # Prefer explicitly configured generation model, then chain stage models.
-    model = (
-        os.getenv("OPENROUTER_MODEL")
-        or os.getenv("MODEL_STAGE1")
-        or os.getenv("MODEL_STAGE2")
-        or os.getenv("MODEL_STAGE3")
+
+def _resolve_model_name(step: int) -> str:
+    if step not in _STEP_ENV_KEYS:
+        raise ValueError(f"step must be 1..4, got {step}")
+    for key in _STEP_ENV_KEYS[step]:
+        v = os.getenv(key)
+        if v:
+            return v
+    primary = _STEP_ENV_KEYS[step][0]
+    raise ValueError(
+        f"No model configured for pipeline step {step}. Set {primary} (or OPENROUTER_MODEL as fallback)."
     )
-    return model
 
 
-def _build_chat(max_tokens=512, temperature=0.0) -> ChatOpenAI:
+def _build_chat(step: int, max_tokens: int = 512, temperature: float = 0.0) -> ChatOpenAI:
     return ChatOpenAI(
         base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
         api_key=os.getenv("OPENROUTER_API_KEY"),
-        model=_resolve_model_name(),
+        model=_resolve_model_name(step),
         extra_body={"reasoning": {"enabled": True}},
         max_tokens=max_tokens,
-        temperature=temperature
+        temperature=temperature,
     )
+
+
+async def timed_safe_ainvoke(
+    step: int,
+    messages: List[BaseMessage],
+    *,
+    max_tokens: int = 512,
+    temperature: float = 0.0,
+) -> tuple[AIMessage, float]:
+    t0 = time.perf_counter()
+    chat = _build_chat(step=step, max_tokens=max_tokens, temperature=temperature)
+    result = await safe_ainvoke(chat, messages)
+    return result, time.perf_counter() - t0
 
 
 def _is_retryable_error(error_text: str) -> bool:

@@ -8,9 +8,10 @@ class Settings(BaseSettings):
         validation_alias="OPENROUTER_BASE_URL",
     )
 
-    model_stage1: str = Field(validation_alias="MODEL_STAGE1")
-    model_stage2: str = Field(validation_alias="MODEL_STAGE2")
-    model_stage3: str = Field(validation_alias="MODEL_STAGE3")
+    model_step1: str = Field(validation_alias="MODEL_STEP1")
+    model_step2: str = Field(validation_alias="MODEL_STEP2")
+    model_step3: str = Field(validation_alias="MODEL_STEP3")
+    model_step4: str = Field(validation_alias="MODEL_STEP4")
 
     timeout_sec: int = Field(default=30, validation_alias="TIMEOUT_SEC")
     max_tokens: int = Field(default=2000, validation_alias="MAX_TOKENS")
@@ -27,4 +28,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-

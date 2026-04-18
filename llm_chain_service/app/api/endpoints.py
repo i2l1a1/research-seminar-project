@@ -25,6 +25,7 @@ async def generate(req: GenerateRequest) -> GenerateResponse:
         answer=final,
         metadata={
             "latency_total_sec": result.get("latency_total_sec"),
+            "latency_per_step": result.get("latency_per_step"),
             "error": result.get("error"),
         },
     )

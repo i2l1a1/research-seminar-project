@@ -6,7 +6,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.core.config import Settings
-from app.core.metrics import llm_chain_latency_seconds, llm_chain_requests_total
+from app.core.metrics import (
+    llm_chain_latency_seconds,
+    llm_chain_requests_total,
+    llm_chain_stage_latency_seconds,
+)
 from app.services.generation.ai_answer_generate import generate_answer_text
 
 logger = logging.getLogger(__name__)
@@ -21,11 +25,14 @@ class LLMChainOrchestrator:
         t0 = time.perf_counter()
         final: str | None = None
         error: str | None = None
+        latency_per_step: dict[str, float] | None = None
 
         try:
-            text = await generate_answer_text(question_title=query, question_text=query)
+            text, latency_per_step = await generate_answer_text(question_title=query, question_text=query)
             stripped = (text or "").strip()
             final = stripped or None
+            for stage, sec in (latency_per_step or {}).items():
+                llm_chain_stage_latency_seconds.labels(stage=stage).observe(sec)
         except Exception:
             logger.exception("generate_answer_text failed")
             error = "generation_failed"
@@ -36,5 +43,6 @@ class LLMChainOrchestrator:
         return {
             "final": final,
             "latency_total_sec": duration,
+            "latency_per_step": latency_per_step,
             "error": error,
         }

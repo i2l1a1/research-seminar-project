@@ -1,12 +1,10 @@
 import json
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.services.generation.build_chat import _build_chat, safe_ainvoke
+from app.services.generation.build_chat import timed_safe_ainvoke
 
 
-async def classify_question(question_title: str, question_text: str) -> dict:
-    chat = _build_chat(max_tokens=512)
-
+async def classify_question(question_title: str, question_text: str) -> tuple[dict, float]:
     system = SystemMessage(
         content="""Ты – классификатор вопросов. Твоя задача - определить тип вопроса и оценить уверенность.
         
@@ -32,7 +30,8 @@ async def classify_question(question_title: str, question_text: str) -> dict:
     )
 
     messages = [system, user]
-    response = (await safe_ainvoke(chat, messages)).content
+    response_msg, classify_sec = await timed_safe_ainvoke(1, messages, max_tokens=512, temperature=0.0)
+    response = response_msg.content
 
     response = response.strip()
     if response.startswith("```json"):
@@ -59,4 +58,4 @@ async def classify_question(question_title: str, question_text: str) -> dict:
         result["confidence"] = 0.5
     result["confidence"] = max(0.0, min(1.0, result["confidence"]))
 
-    return result
+    return result, classify_sec
