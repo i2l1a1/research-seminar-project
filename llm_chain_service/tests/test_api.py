@@ -1,10 +1,10 @@
 import os
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
 
 os.environ.setdefault("OPENROUTER_API_KEY", "test-key")
+os.environ.setdefault("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 os.environ.setdefault("MODEL_STAGE1", "model_stage1")
 os.environ.setdefault("MODEL_STAGE2", "model_stage2")
 os.environ.setdefault("MODEL_STAGE3", "model_stage3")
@@ -31,18 +31,20 @@ def test_post_generate_invalid_json_returns_422():
 
 def test_post_generate_success_returns_chain_json():
     mocked = {
-        "draft": "draft",
-        "validated": "validated",
         "final": "final",
-        "latency_per_stage": {"stage1_sec": 0.01, "stage2_sec": 0.02, "stage3_sec": 0.03},
+        "latency_total_sec": 0.05,
+        "error": None,
     }
 
-    with patch("app.api.endpoints.LLMChainOrchestrator.run", return_value=mocked):
+    with patch(
+        "app.api.endpoints.LLMChainOrchestrator.run",
+        new_callable=AsyncMock,
+        return_value=mocked,
+    ):
         resp = client.post("/v1/generate", json={"query": "hi"})
 
     assert resp.status_code == 200
     body = resp.json()
     assert body["answer"] == "final"
-    assert body["metadata"]["draft"] == "draft"
-    assert body["metadata"]["validated"] == "validated"
-    assert "latency_per_stage" in body["metadata"]
+    assert body["metadata"]["latency_total_sec"] == 0.05
+    assert body["metadata"]["error"] is None
