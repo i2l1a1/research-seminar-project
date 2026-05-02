@@ -3,30 +3,36 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.services.generation.build_chat import timed_safe_ainvoke
 
+from langdetect import detect
+
+import json
+from langchain_core.messages import HumanMessage, SystemMessage
+from app.services.generation.build_chat import timed_safe_ainvoke
+
 
 async def classify_question(question_title: str, question_text: str) -> tuple[dict, float]:
     system = SystemMessage(
-        content="""Ты – классификатор вопросов. Твоя задача - определить тип вопроса и оценить уверенность.
-        
-Типы вопросов:
-1. technical - вопросы с однозначным фактическим ответом (синтаксис, даты, определения, факты).
-2. advice - вопросы о выборе, советах, сравнении вариантов, где нет единственно верного ответа.
-3. tutorial - вопросы, требующие объяснения, пошагового руководства, обучения.
-4. current - вопросы о событиях, новостях, будущем, требующие актуальных данных (модель может не знать).
-5. creative - вопросы на генерацию идей, сценариев, текстов, названий, дизайна.
+        content="""You are a question classifier. Your task is to determine the type of question and assess your confidence.
 
-Верни ответ строго в формате JSON:
-{"type": "один_из_пяти", "confidence": 0.95}
+Question types:
+1. technical - questions with an unambiguous factual answer (syntax, dates, definitions, facts).
+2. advice - questions about choice, advice, comparison of options, where there is no single correct answer.
+3. tutorial - questions requiring explanation, step-by-step guidance, learning.
+4. current - questions about events, news, the future, requiring up-to-date data (the model may not know).
+5. creative - questions about generating ideas, scenarios, texts, names, design.
 
-Не добавляй никаких других пояснений."""
+Return the answer strictly in JSON format:
+{"type": "one_of_the_five", "confidence": 0.95}
+
+Do not add any other explanations."""
     )
 
     user = HumanMessage(
-        content=f"""Заголовок: {question_title}
-Текст вопроса:
+        content=f"""Title: {question_title}
+Question text:
 {question_text}
 
-Определи тип вопроса и уверенность в формате JSON."""
+Determine the question type and confidence in JSON format."""
     )
 
     messages = [system, user]
@@ -59,3 +65,70 @@ async def classify_question(question_title: str, question_text: str) -> tuple[di
     result["confidence"] = max(0.0, min(1.0, result["confidence"]))
 
     return result, classify_sec
+
+
+def detect_question_language(question_title: str, question_text: str) -> str:
+    full_text = f"{question_title} {question_text}"
+    try:
+        lang_code = detect(full_text)
+    except:
+        lang_code = "en"
+
+    lang_map = {
+        "en": "English",
+        "de": "German",
+        "fr": "French",
+        "es": "Spanish",
+        "it": "Italian",
+        "zh-cn": "Chinese",
+        "ja": "Japanese",
+        "ru": "Russian",
+        "af": "Afrikaans",
+        "ar": "Arabic",
+        "bg": "Bulgarian",
+        "bn": "Bengali",
+        "ca": "Catalan",
+        "cs": "Czech",
+        "cy": "Welsh",
+        "da": "Danish",
+        "el": "Greek",
+        "et": "Estonian",
+        "fa": "Persian",
+        "fi": "Finnish",
+        "gu": "Gujarati",
+        "he": "Hebrew",
+        "hi": "Hindi",
+        "hr": "Croatian",
+        "hu": "Hungarian",
+        "id": "Indonesian",
+        "kn": "Kannada",
+        "ko": "Korean",
+        "lt": "Lithuanian",
+        "lv": "Latvian",
+        "mk": "Macedonian",
+        "ml": "Malayalam",
+        "mr": "Marathi",
+        "ne": "Nepali",
+        "nl": "Dutch",
+        "no": "Norwegian",
+        "pa": "Punjabi",
+        "pl": "Polish",
+        "pt": "Portuguese",
+        "ro": "Romanian",
+        "sk": "Slovak",
+        "sl": "Slovenian",
+        "so": "Somali",
+        "sq": "Albanian",
+        "sv": "Swedish",
+        "sw": "Swahili",
+        "ta": "Tamil",
+        "te": "Telugu",
+        "th": "Thai",
+        "tl": "Tagalog",
+        "tr": "Turkish",
+        "uk": "Ukrainian",
+        "ur": "Urdu",
+        "vi": "Vietnamese",
+        "zh-tw": "Chinese (Traditional)",
+    }
+    return lang_map.get(lang_code, "English")

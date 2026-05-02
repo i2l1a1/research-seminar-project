@@ -1,30 +1,32 @@
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.services.generation.build_chat import timed_safe_ainvoke
+from app.services.generation.classify_question import detect_question_language
 
 
 async def generate_answer_text(question_title: str, question_text: str) -> tuple[str, dict[str, float]]:
     latency: dict[str, float] = {}
 
+    detected_language = detect_question_language(question_title, question_text)
+
     step1_system = SystemMessage(
-        content="Ты - нейтральный технический эксперт. Отвечай только на основе достоверных знаний. Все инструкции написаны на русском, но ты должен определить язык вопроса по самому вопросу пользователя, а не по языку инструкций."
+        content="You are a neutral technical expert. Answer only based on reliable knowledge."
     )
     step1_user = HumanMessage(
-        content=f"""Вопрос пользователя:
-Заголовок: {question_title}
-Текст: {question_text}
+        content=f"""User's question:
+Title: {question_title}
+Text: {question_text}
 
-ВНИМАНИЕ: Определи язык вопроса, прочитав сам вопрос (заголовок и текст). Не ориентируйся на язык инструкций. Язык вопроса может быть русским, английским, немецким и т.д.
-Затем перечисли ключевые факты, необходимые для ответа, в виде простого списка.
-Если ты не уверен в каком-то факте, обязательно укажи это (например: «Я не уверен в ...»).
-Не придумывай источники и не выдумывай информацию.
-В конце укажи язык, на котором нужно дать ответ (именно тот, который определил по вопросу).
+List the key facts needed to answer, as a simple list.
+If you are unsure about any fact, be sure to indicate that (e.g., "I am not sure about ...").
+Do not invent sources or make up information.
+You MUST write these facts in {detected_language}.
 
-Вывод оформи в формате:
-Язык: <язык>
-Факты:
-- факт 1
-- факт 2
+Format the output as:
+Language: {detected_language}
+Facts:
+- fact 1
+- fact 2
 ..."""
     )
     step1_messages = [step1_system, step1_user]
@@ -32,66 +34,60 @@ async def generate_answer_text(question_title: str, question_text: str) -> tuple
         2, step1_messages, max_tokens=4096, temperature=0.0
     )
     step1_result = msg1.content
-    print("=== [Technical] Шаг 1 (Факты и язык) ===\n", step1_result, "\n")
-
-    detected_language = "русский"
-    for line in step1_result.split("\n"):
-        if line.lower().startswith("язык:"):
-            detected_language = line.split(":", 1)[1].strip()
-            break
+    print("=== [Technical] Step 1 (Facts and language) ===\n", step1_result, "\n")
 
     step2_system = SystemMessage(
-        content="Ты - участник технического форума. Отвечай кратко, точно, по существу. Тон - нейтральный, строгий. Не используй списки, маркдаун, лишние пояснения."
+        content="You are a technical forum participant. Answer briefly, accurately, to the point. Tone - neutral, strict. Do not use lists, Markdown, or unnecessary explanations."
     )
     step2_user = HumanMessage(
-        content=f"""На основе фактов напиши ответ на вопрос:
+        content=f"""Based on the facts, write an answer to the question:
 {question_title} - {question_text}
 
-Факты и язык:
+Facts:
 {step1_result}
 
-Правила:
-- Ты ОБЯЗАН ответить на языке: {detected_language}. Это самый важный пункт.
-- Тон - нейтральный, строгий.
-- Не используй маркдаун (**жирный**, *курсив*, списки, заголовки, блоки кода).
-- Разбивай ответ на параграфы (\\n\\n) только если это необходимо для логики.
-- Если фактов недостаточно, честно скажи «Я не знаю ответа на этот вопрос» (на языке {detected_language}).
-- Не добавляй вымышленную информацию.
-- ЗАПРЕЩЕНО добавлять в ответ любые фразы-паразиты: «если нужна будет дополнительная информация, обращайтесь», «всегда рад помочь», «если что-то непонятно - просто спроси», «надеюсь, это поможет», «удачи» и любые другие вежливые завершающие фразы. Ответ должен быть строго по существу, без предложений дальнейшей помощи.
+Rules:
+- You MUST answer in {detected_language}. This is the most important point.
+- Tone - neutral, strict.
+- Do not use Markdown (**bold**, *italic*, lists, headings, code blocks).
+- Split the answer into paragraphs (\\n\\n) only if necessary for logic.
+- If there are not enough facts, honestly say "I don't know the answer to this question" (in {detected_language}).
+- Do not add made-up information.
+- FORBIDDEN to add any filler phrases (e.g., "if you need more info, let me know", "always happy to help", "if something is unclear just ask", "hope this helps", "good luck", or any polite closing phrases). The answer must end with the last useful sentence on the topic.
 
-Ответ:"""
+Answer:"""
     )
     step2_messages = [step2_system, step2_user]
     msg2, latency["step3_sec"] = await timed_safe_ainvoke(
         3, step2_messages, max_tokens=4096, temperature=0.0
     )
     step2_result = msg2.content
-    print("=== [Technical] Шаг 2 (Черновик) ===\n", step2_result, "\n")
+    print("=== [Technical] Step 2 (Draft) ===\n", step2_result, "\n")
 
     step3_system = SystemMessage(
-        content="Ты - редактор. Возвращай только исправленный текст ответа, без комментариев, пояснений, списков, нумерации, заголовков."
+        content="You are an editor. Return only the corrected answer text, without comments, explanations, lists, numbering, or headings."
     )
     step3_user = HumanMessage(
-        content=f"""Проверь и исправь ответ.
+        content=f"""Check and correct the answer.
 
-Исходный вопрос: {question_title} - {question_text}
-Достоверные факты: {step1_result}
-Сгенерированный ответ: {step2_result}
+Original question: {question_title} - {question_text}
+Reliable facts: {step1_result}
+Generated answer: {step2_result}
 
-Задача:
-1. Убедись, что ответ написан на языке: {detected_language}. Если это не так - перепиши ответ полностью на этом языке, сохранив содержание.
-2. Удали любые выдумки, выходящие за рамки фактов.
-3. Удали элементы маркдауна (** , *, `, #, -, списки). Оставь только обычный текст, разделённый на параграфы (\\n\\n).
-4. УДАЛИ ЛЮБЫЕ ФРАЗЫ-ПАРАЗИТЫ: «если нужна будет дополнительная информация, обращайтесь», «всегда рад помочь», «если что-то непонятно - просто спроси», «надеюсь, это поможет», «удачи», «успехов», «обращайтесь», «всего доброго» и любые другие завершающие вежливые фразы. Ответ должен заканчиваться последним полезным предложением по существу.
-5. Если всё хорошо, верни ответ без изменений.
+Task:
+1. Ensure the answer is written in {detected_language}. If not, rewrite it completely in that language, preserving the content.
+2. Remove any fabrications beyond the facts.
+3. Remove Markdown elements (** , *, `, #, -, lists). Leave only plain text, separated into paragraphs (\\n\\n).
+4. REMOVE ANY FILLER PHRASES: "if you need more information, feel free to ask", "always happy to help", "if something is unclear just ask", "hope this helps", "good luck", "best regards", "success", "feel free to reach out", "all the best", and any other polite closing phrases. The answer must end with the last useful sentence on the topic.
+5. If everything is fine, return the answer unchanged.
 
-Верни только исправленный ответ. Без пояснений."""
+Return only the corrected answer. No explanations."""
     )
     step3_messages = [step3_system, step3_user]
     msg3, latency["step4_sec"] = await timed_safe_ainvoke(
         4, step3_messages, max_tokens=4096, temperature=0.0
     )
     step3_result = msg3.content
-    print("=== [Technical] Шаг 3 (Финальный ответ) ===\n", step3_result, "\n")
+    print("=== [Technical] Step 3 (Final answer) ===\n", step3_result, "\n")
 
     return step3_result, latency

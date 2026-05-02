@@ -9,8 +9,6 @@ from langchain_openai import ChatOpenAI
 
 load_dotenv(dotenv_path=".env")
 
-# Шаг 1 — classify_question; шаги 2–4 — три LLM-вызова в generate_answer_text (по типу вопроса).
-# Fallback: OPENROUTER_MODEL или предыдущие MODEL_STEP*, если для шага не задано отдельно.
 _STEP_ENV_KEYS: dict[int, list[str]] = {
     1: ["MODEL_STEP1", "OPENROUTER_MODEL"],
     2: ["MODEL_STEP2", "MODEL_STEP1", "OPENROUTER_MODEL"],
