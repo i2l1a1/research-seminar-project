@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     model_step2: str = Field(validation_alias="MODEL_STEP2")
     model_step3: str = Field(validation_alias="MODEL_STEP3")
     model_step4: str = Field(validation_alias="MODEL_STEP4")
+    model_step5: str = Field(validation_alias="MODEL_STEP5")
 
     timeout_sec: int = Field(default=30, validation_alias="TIMEOUT_SEC")
     max_tokens: int = Field(default=2000, validation_alias="MAX_TOKENS")

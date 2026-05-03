@@ -5,7 +5,6 @@ from app.models.requests import GenerateRequest
 from app.models.responses import GenerateResponse
 from app.services.chain import LLMChainOrchestrator
 
-
 router = APIRouter(prefix="/v1")
 
 
@@ -28,4 +27,5 @@ async def generate(req: GenerateRequest) -> GenerateResponse:
             "latency_per_step": result.get("latency_per_step"),
             "error": result.get("error"),
         },
+        quality_scores=result.get("quality_scores"),
     )
