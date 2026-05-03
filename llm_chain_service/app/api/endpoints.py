@@ -26,6 +26,7 @@ async def generate(req: GenerateRequest) -> GenerateResponse:
             "latency_total_sec": result.get("latency_total_sec"),
             "latency_per_step": result.get("latency_per_step"),
             "error": result.get("error"),
+            "question_type": result.get("question_type"),
         },
         quality_scores=result.get("quality_scores"),
     )

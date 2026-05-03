@@ -35,16 +35,24 @@ class LLMChainOrchestrator:
         error: str | None = None
         latency_per_step: dict[str, float] | None = None
         quality_scores: dict[str, int] | None = None
+        q_type: str | None = None
 
         try:
-            text, latency_per_step = await generate_answer_text(question_title=query, question_text=query)
+            text, latency_per_step, q_type = await generate_answer_text(question_title=query, question_text=query)
             stripped = (text or "").strip()
             final = stripped or None
             for stage, sec in (latency_per_step or {}).items():
                 llm_chain_stage_latency_seconds.labels(stage=stage).observe(sec)
 
             if final:
+                t_judge_start = time.perf_counter()
                 scores = await evaluate_answer(query, final, model_step=5)
+                t_judge_sec = time.perf_counter() - t_judge_start
+                if latency_per_step is None:
+                    latency_per_step = {}
+                latency_per_step["step5_judge_sec"] = t_judge_sec
+                llm_chain_stage_latency_seconds.labels(stage="step5_judge_sec").observe(t_judge_sec)
+
                 if scores:
                     quality_scores = scores
                     llm_answer_accuracy.observe(scores["accuracy"])
@@ -69,4 +77,5 @@ class LLMChainOrchestrator:
             "latency_per_step": latency_per_step,
             "error": error,
             "quality_scores": quality_scores,
+            "question_type": q_type,
         }

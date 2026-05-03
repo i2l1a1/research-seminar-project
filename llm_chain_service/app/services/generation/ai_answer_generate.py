@@ -6,7 +6,7 @@ from app.services.generation.ai_answer_generate_current import generate_answer_t
 from app.services.generation.ai_answer_generate_creative import generate_answer_text as creative_generate
 
 
-async def generate_answer_text(question_title: str, question_text: str) -> tuple[str, dict[str, float]]:
+async def generate_answer_text(question_title: str, question_text: str) -> tuple[str, dict[str, float], str]:
     classification, step1_sec = await classify_question(question_title, question_text)
     q_type = classification.get("type", "advice")
     confidence = classification.get("confidence", 0.5)
@@ -29,4 +29,4 @@ async def generate_answer_text(question_title: str, question_text: str) -> tuple
         "step1_classify_sec": step1_sec,
         **lat,
     }
-    return text, latency_per_step
+    return text, latency_per_step, q_type
