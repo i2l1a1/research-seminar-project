@@ -96,21 +96,21 @@ model {
         '''
       }
 
-      draft = component 'Шаг 2: Сбор фактов' {
+      factGathering = component 'Шаг 2: Сбор фактов' {
         #ml #mvp
         description '''
         LLM собирает все известные ей факты, чтобы в будущих промптах опираться на эти факты.
         '''
       }
 
-      validate = component 'Шаг 3: Генерация черновика' {
+      draftGeneration = component 'Шаг 3: Генерация черновика' {
         #ml #mvp
         description '''
         LLM генерирует черновик ответа с опорой на факты. Тут могут быть погрешности в стиле и лишние фразы.
         '''
       }
 
-      improve = component 'Шаг 4: Генерация финального ответа' {
+      finalGeneration = component 'Шаг 4: Генерация финального ответа' {
         #ml #mvp
         description '''
         LLM финализирует ответ: добавляет/убирает детали, улучшает структуру и логику ответа.
@@ -255,15 +255,15 @@ model {
   app.pipeline.configUsage -> app.observability.promExporter 'latency/cost metrics'
 
   app.restApi.generate -> app.pipeline.classify 'step1'
-  app.pipeline.classify -> app.pipeline.draft 'step2 (by type)'
-  app.pipeline.draft -> app.pipeline.validate 'step3'
-  app.pipeline.validate -> app.pipeline.improve 'step4'
-  app.pipeline.improve -> app.pipeline.judge 'step5 (LLM-as-a-judge)'
+  app.pipeline.classify -> app.pipeline.factGathering 'step2'
+  app.pipeline.factGathering -> app.pipeline.draftGeneration 'step3'
+  app.pipeline.draftGeneration -> app.pipeline.finalGeneration 'step4'
+  app.pipeline.finalGeneration -> app.pipeline.judge 'step5 (LLM-as-a-judge)'
 
   app.pipeline.classify -> app.pipeline.routerAdapter 'classify model'
-  app.pipeline.draft -> app.pipeline.routerAdapter 'draft model'
-  app.pipeline.validate -> app.pipeline.routerAdapter 'validation model'
-  app.pipeline.improve -> app.pipeline.routerAdapter 'improve model'
+  app.pipeline.factGathering -> app.pipeline.routerAdapter 'fact gathering model'
+  app.pipeline.draftGeneration -> app.pipeline.routerAdapter 'draft generation model'
+  app.pipeline.finalGeneration -> app.pipeline.routerAdapter 'final generation model'
   app.pipeline.judge -> app.pipeline.routerAdapter 'judge model (step5)'
   app.pipeline.routerAdapter -> openrouter.openrouterApi 'HTTPS'
 
@@ -274,7 +274,7 @@ model {
 
   app.restApi.generate -> app.scaling.jobsQueue 'enqueue async (future)'
   app.scaling.jobsQueue -> app.pipeline.configUsage 'execute in background'
-  app.pipeline.draft -> app.scaling.redisCache 'cache (future)'
+  app.pipeline.factGathering -> app.scaling.redisCache 'cache (future)'
 }
 
 views {
@@ -283,9 +283,9 @@ views {
     description '''
     Актуальная архитектура проекта. Отражены 5 этапов LLM-цепочки:
     1. Классификация вопроса
-    2. Генерация черновика (с учётом типа)
-    3. Валидация и исправление
-    4. Улучшение и структурирование
+    2. Сбор фактов
+    3. Генерация черновика
+    4. Генерация финального ответа
     5. Оценка качества (LLM-as-a-judge)
 
     Все этапы используют OpenRouter с бесплатными моделями.
