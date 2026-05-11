@@ -1,8 +1,8 @@
-import asyncio
 import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from app.services.chain import LLMChainOrchestrator
 
 
@@ -19,68 +19,58 @@ def _sample_latency() -> dict[str, float]:
     }
 
 
-def test_chain_empty_query_returns_empty_final():
-    async def _run():
-        with patch(
+@pytest.mark.asyncio
+async def test_chain_empty_query_returns_empty_final():
+    with patch(
             "app.services.chain.generate_answer_text",
             new_callable=AsyncMock,
-            return_value=("", _sample_latency()),
-        ):
-            orchestrator = LLMChainOrchestrator(settings=make_settings())
-            return await orchestrator.run("")
-
-    result = asyncio.run(_run())
-    assert result["final"] is None
-    assert result["latency_per_step"] is not None
+            return_value=("", _sample_latency(), "advice"),
+    ):
+        orchestrator = LLMChainOrchestrator(settings=make_settings())
+        result = await orchestrator.run("")
+        assert result["final"] is None
+        assert result["latency_per_step"] is not None
 
 
-def test_chain_single_generation_call():
-    async def _run():
-        with patch(
+@pytest.mark.asyncio
+async def test_chain_single_generation_call():
+    with patch(
             "app.services.chain.generate_answer_text",
             new_callable=AsyncMock,
-            return_value=("ok", _sample_latency()),
-        ) as gen:
-            orchestrator = LLMChainOrchestrator(settings=make_settings())
-            await orchestrator.run("hello")
-            return gen
-
-    gen = asyncio.run(_run())
-    assert gen.await_count == 1
+            return_value=("ok", _sample_latency(), "advice"),
+    ) as gen:
+        orchestrator = LLMChainOrchestrator(settings=make_settings())
+        await orchestrator.run("hello")
+        assert gen.await_count == 1
 
 
-def test_chain_success_has_expected_fields():
+@pytest.mark.asyncio
+async def test_chain_success_has_expected_fields():
     lat = _sample_latency()
-
-    async def _run():
-        with patch(
+    with patch(
             "app.services.chain.generate_answer_text",
             new_callable=AsyncMock,
-            return_value=("final text", lat),
-        ):
-            orchestrator = LLMChainOrchestrator(settings=make_settings())
-            return await orchestrator.run("hello")
-
-    result = asyncio.run(_run())
-    assert "final" in result
-    assert result["final"] == "final text"
-    assert "latency_total_sec" in result
-    assert result["latency_per_step"] == lat
+            return_value=("final text", lat, "advice"),
+    ):
+        orchestrator = LLMChainOrchestrator(settings=make_settings())
+        result = await orchestrator.run("hello")
+        assert "final" in result
+        assert result["final"] == "final text"
+        assert "latency_total_sec" in result
+        assert result["latency_per_step"] == lat
 
 
-def test_chain_exception_is_handled(caplog):
-    async def _run():
-        with patch(
+@pytest.mark.asyncio
+async def test_chain_exception_is_handled(caplog):
+    caplog.set_level(logging.ERROR)
+    with patch(
             "app.services.chain.generate_answer_text",
             new_callable=AsyncMock,
             side_effect=TimeoutError("LLM timeout"),
-        ):
-            orchestrator = LLMChainOrchestrator(settings=make_settings())
-            caplog.set_level(logging.ERROR)
-            return await orchestrator.run("hello")
-
-    result = asyncio.run(_run())
-    assert result["final"] is None
-    assert result["error"] == "generation_failed"
-    assert result["latency_per_step"] is None
-    assert any("generate_answer_text failed" in rec.message for rec in caplog.records)
+    ):
+        orchestrator = LLMChainOrchestrator(settings=make_settings())
+        result = await orchestrator.run("hello")
+        assert result["final"] is None
+        assert result["error"] == "generation_failed"
+        assert result["latency_per_step"] is None
+        assert any("generate_answer_text failed" in rec.message for rec in caplog.records)

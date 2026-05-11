@@ -37,7 +37,7 @@ def test_live_generate_answer_text_full_pipeline():
             question_text="Ответь одним коротким предложением: сколько будет 2+2?",
         )
 
-    text, latency_per_step = asyncio.run(_run())
+    text, latency_per_step, question_type = asyncio.run(_run())
 
     assert isinstance(text, str)
     assert text.strip(), "пустой ответ от модели"
@@ -48,6 +48,7 @@ def test_live_generate_answer_text_full_pipeline():
     for k, sec in latency_per_step.items():
         assert isinstance(sec, (int, float)), k
         assert sec >= 0.0, k
+    assert question_type in {"technical", "advice", "tutorial", "current", "creative"}
 
 
 @pytest.mark.integration
