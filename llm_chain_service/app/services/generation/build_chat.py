@@ -7,6 +7,9 @@ from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, BaseMessage
 from langchain_openai import ChatOpenAI
 
+import logging
+logger = logging.getLogger(__name__)
+
 load_dotenv(dotenv_path=".env")
 
 _STEP_ENV_KEYS: dict[int, list[str]] = {
@@ -84,13 +87,13 @@ async def safe_ainvoke(chat: ChatOpenAI, messages: List[BaseMessage], retries: i
         except Exception as e:
             last_error = e
             error_str = str(e)
-            print("[error] [safe_ainvoke]")
-            print(error_str)
+            logger.error("[error] [safe_ainvoke]")
+            logger.error(error_str)
             if _is_retryable_error(error_str) and attempt < retries - 1:
                 await asyncio.sleep(delay * (attempt + 1))
                 continue
             if not _is_retryable_error(error_str):
                 raise
     if last_error is not None:
-        print("[error] [safe_ainvoke] retries exhausted, returning fallback answer")
+        logger.error("[error] [safe_ainvoke] retries exhausted, returning fallback answer")
     return AIMessage(content="The answer cannot be generated.")

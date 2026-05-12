@@ -3,6 +3,8 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from app.services.generation.build_chat import timed_safe_ainvoke
 from app.services.generation.classify_question import detect_question_language
 
+import logging
+logger = logging.getLogger(__name__)
 
 async def generate_answer_text(question_title: str, question_text: str) -> tuple[str, dict[str, float]]:
     latency: dict[str, float] = {}
@@ -33,7 +35,7 @@ Facts and steps:
         2, step1_messages, max_tokens=4096, temperature=0.2
     )
     step1_result = msg1.content
-    print("=== [Tutorial] Step 1 (Facts and steps) ===\n", step1_result, "\n")
+    logger.info("[Tutorial] Step 1 (Facts and steps)\n%s\n", step1_result)
 
     step2_system = SystemMessage(
         content="You are a patient teacher on a forum. Explain clearly, step by step, with examples. Tone - friendly, supportive. Do not use Markdown, but you may number steps using words (First step, Second step) or phrases like 'First...', 'Then...', 'After that...'."
@@ -63,7 +65,7 @@ Answer:"""
         3, step2_messages, max_tokens=4096, temperature=0.2
     )
     step2_result = msg2.content
-    print("=== [Tutorial] Step 2 (Draft) ===\n", step2_result, "\n")
+    logger.info("[Tutorial] Step 2 (Draft)\n%s\n", step2_result)
 
     step3_system = SystemMessage(
         content="You are an editor. Return only the corrected answer text, without comments, explanations, lists, numbering, or headings."
@@ -90,6 +92,6 @@ Return only the corrected answer. No explanations."""
         4, step3_messages, max_tokens=4096, temperature=0.2
     )
     step3_result = msg3.content
-    print("=== [Tutorial] Step 3 (Final answer) ===\n", step3_result, "\n")
+    logger.info("[Tutorial] Step 3 (Final answer)\n%s\n", step3_result)
 
     return step3_result, latency
